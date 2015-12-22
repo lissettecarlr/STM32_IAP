@@ -1,16 +1,30 @@
 #include "IAP.h"
 
-u8 SWITCH=1;
+u8 SWITCH;
 
 void start_procedure(void);
 void receive_storage_Procedure(void);
 void EraseFlash(u32 addr,u8 pagenumber); //由于在该函数中读取了串口发来的页数，改还是第二个参数无意义
 
+#define UPDATA_FLAG_ADDR 0x0800F000
+
+void judge_updata()
+{
+	uint16_t flag;
+	flag=(*(__IO uint16_t*)(UPDATA_FLAG_ADDR)); //读出标识位，该标识为由APP程序修改
+	if(flag==0xffff)
+	{
+		SWITCH=1;
+		BootLoader<<"\n Send FF page AA,choose page number";
+	}
+	else
+		SWITCH=4; //直接执行APP程序
+}
+
 
 int main ()
 {
-	 SWITCH=1;
-	 BootLoader<<"FF page AA";
+	 judge_updata();
 while(1)
 	{
 	

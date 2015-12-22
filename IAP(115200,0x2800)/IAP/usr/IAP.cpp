@@ -143,49 +143,6 @@ void USART1_IRQHandler(void)
 
 
 //IAP***************************************************************************
-void IAP::write_appbin()
-{
-//	u16 t;
-//	u16 i=0;
-//	u16 buff[1024];
-//	u32 fwaddr=0;
-//	u16 temp;
-//	u8 *dfu=USART_Buffer;
-//	for(t=0;t<USART_Data_Len;t++)
-//	{						    
-//		//合成一个16位
-//		temp=(u16)dfu[1]<<8;
-//		temp+=(u16)dfu[0];	  
-//		dfu+=2;//偏移2个字节
-//		
-//		buff[i++]=temp;	
-//		if(i==STM_SECTOR_SIZE/2)
-//		{
-//			i=0;
-//			Write(fwaddr,buff,STM_SECTOR_SIZE/2);	
-//			fwaddr++;//翻到下一页
-//		}
-//	}
-//	if(i)Write(fwaddr,buff,i);//将最后的一些内容字节写进去.  
-	
-	
-//	u16 t;
-//	u16 i=0;
-//	u16 buff[1024];
-//	u16 temp;
-//	u8 *dfu=USART_Buffer;
-//	for(t=0;t<(USART_Data_Len/2);t++)
-//	{						    
-//		//合成一个16位
-//		temp=(u16)dfu[1]<<8;
-//		temp+=(u16)dfu[0];	  
-//		dfu+=2;//偏移2个字节
-//		buff[i++]=temp;	
-//	}
-//	
-//	Write(0,buff,i);
-}
-
 //跳转到应用程序段
 //appxaddr:用户代码起始地址.
 bool IAP::load_app()
