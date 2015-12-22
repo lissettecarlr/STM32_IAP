@@ -1,6 +1,6 @@
 #include "IAP.h"
 
-IAP BootLoader(9600,true);
+IAP BootLoader(115200,true);
 
 void IAP::USART_init(u32 baud)
 {
@@ -61,7 +61,7 @@ IAP::IAP(u32 baud,bool useHalfWord)
 	USART_COUNT=0;
 	USART_FLAG=0;
 	FlashPages=0;
-	
+	state=0;
 	USART_init(baud);
 	
 //	if(startAddress%STM_SECTOR_SIZE !=0)//不是页的开始,将开始处设置为下一个页开始的地方
@@ -82,6 +82,12 @@ void IAP::USART_IRQ(void)
 
 		ch = USART_ReceiveData(USART1);
 		
+if(state==0)
+{
+	USART_Buffer[USART_Data_Len++]=ch;
+}
+else
+{	
 		if(flag==0)
 		{
 			flag=1;
@@ -97,12 +103,6 @@ void IAP::USART_IRQ(void)
 		
 			USART_Data_Len++;
 			addr=addr+0x02;	
-
-			//TEST start
-//			USART_Buffer[0]=(u16)ch<<8;
-//			USART_Buffer[1]+=(u16)Last_data;
-//			FLASH_ProgramHalfWord(addr,0x12);
-			//TEST END
 					
 //			FLASH_Lock();	
 				
@@ -116,6 +116,8 @@ void IAP::USART_IRQ(void)
 		USART_FLAG=1;//标识读取
 		
 	}
+}
+	
 
 }
 

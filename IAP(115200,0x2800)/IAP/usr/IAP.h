@@ -24,16 +24,13 @@ class IAP{
 
 	private:
 		iapfun jump2app;//单纯的指针
-	
 		bool mUseHalfWord;//储存字长  16/32 默认16位
-//		uint32_t mStartAddress;//开始储存的地址
 		void USART_init(u32 baud);
 	
-
 	public:
 		u16 FlashPages;
-//		u8 USART_Buffer[STM_SECTOR_SIZE];
 		u16 USART_Buffer[512];
+		u8 state;
 	
 		IAP(u32 baud,bool useHalfWord);//构造函数
 	
