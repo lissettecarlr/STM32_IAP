@@ -63,11 +63,6 @@ IAP::IAP(u32 baud,bool useHalfWord)
 	FlashPages=0;
 	state=0;
 	USART_init(baud);
-	
-//	if(startAddress%STM_SECTOR_SIZE !=0)//不是页的开始,将开始处设置为下一个页开始的地方
-//		startAddress+=(STM_SECTOR_SIZE-(startAddress%STM_SECTOR_SIZE));
-	mUseHalfWord=useHalfWord;
-	
 }
 
 
@@ -82,12 +77,12 @@ void IAP::USART_IRQ(void)
 
 		ch = USART_ReceiveData(USART1);
 		
-if(state==0)
-{
-	USART_Buffer[USART_Data_Len++]=ch;
-}
-else
-{	
+	if(state==0)
+	{
+	   USART_Buffer[USART_Data_Len++]=ch;
+	}
+	else
+	{	
 		if(flag==0)
 		{
 			flag=1;
@@ -96,18 +91,16 @@ else
 		else
 		{		
 			flag=0;
-			USART_Buffer[USART_Data_Len]=(u16)ch<<8;
-			USART_Buffer[USART_Data_Len]+=(u16)Last_data;
+			USART_Buffer[USART_Data_Len]=(u16)ch<<8;//将后得到的数据作为高位
+			USART_Buffer[USART_Data_Len]+=(u16)Last_data;//将先得到的数据作为低位
 					
 			FLASH_ProgramHalfWord(addr,USART_Buffer[USART_Data_Len]);
 		
 			USART_Data_Len++;
-			addr=addr+0x02;	
-					
-//			FLASH_Lock();	
+			addr=addr+0x02;				
 				
 		}
-		if(USART_Data_Len>=512)  //当写满一页后
+		if(USART_Data_Len>=FLASH_ONEPAGE_SIZE/2)  //当写满一页后
 		{
 			USART_Data_Len=0;
 			FlashPages++;
@@ -116,9 +109,8 @@ else
 		USART_FLAG=1;//标识读取
 		
 	}
-}
 	
-
+}
 }
 
 void IAP::delay_ms(u16 nms)
@@ -158,36 +150,6 @@ bool IAP::load_app()
 		return false;
 	}
 }	
-
-//Memory********************************************************************************************
-
-bool IAP::Read(uint16_t pageNumber, uint16_t* data,u16 length)
-{
-	u16 dataLength=length;
-	if(mUseHalfWord)
-	{
-		while(dataLength)
-		{
-			*data=(*(__IO uint16_t*)(FLASH_APP_ADDR+pageNumber*STM_SECTOR_SIZE+(length-dataLength)*2));
-			++data;
-			--dataLength;
-		}
-	}
-	else
-	{
-		while(dataLength)
-		{
-			*data=(u32)(*(__IO uint32_t*)(FLASH_APP_ADDR+pageNumber*STM_SECTOR_SIZE+(length-dataLength)*4));
-			++data;
-			--dataLength;
-		}
-	}
-	return true;
-}
-
-
-
-
 
 extern "C"{
 	
