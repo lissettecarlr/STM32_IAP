@@ -9,8 +9,20 @@ int main ()
 {
 //	if(GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_8)==1)
 //		SWITCH=3;
+	
+	SWITCH=1;
+	
+	FLASH_Unlock();
+	FLASH_ClearFlag(FLASH_FLAG_BSY|FLASH_FLAG_EOP|
+	FLASH_FLAG_PGERR|FLASH_FLAG_WRPRTERR);
+	FLASH_ErasePage(FLASH_APP_ADDR);
+	FLASH_ErasePage(FLASH_APP_ADDR+1024);
+	//FLASH_Lock();	
+	
+	
 while(1)
 	{
+	
 		switch (SWITCH)
 		{
 			case 1:{
@@ -19,8 +31,7 @@ while(1)
 			}break;
 			
 			case 2:{
-					receive_storage_Procedure();
-					
+					receive_storage_Procedure();				
 			}break;
 			
 			case 3:{
@@ -39,8 +50,7 @@ while(1)
 void receive_storage_Procedure(void)
 {
 	if(BootLoader.USART_FLAG==1){//正在传输文件
-		if(BootLoader.USART_COUNT>10000){//传输完成
-			BootLoader.write_appbin();
+		if(BootLoader.USART_COUNT>1000000){//传输完成
 			BootLoader.USART_Data_Len=0;
 			BootLoader<<"Data is written to complete...\r\n";
 			SWITCH=3;	

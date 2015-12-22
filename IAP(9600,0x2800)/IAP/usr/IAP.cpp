@@ -1,6 +1,6 @@
 #include "IAP.h"
 
-IAP BootLoader(115200,FLASH_APP_ADDR,true);
+IAP BootLoader(9600,true);
 
 void IAP::USART_init(u32 baud)
 {
@@ -49,36 +49,74 @@ IAP& IAP::operator<<(const char* pStr)
     while(*pStr)
     {
         USART1->DR= *pStr++;
-		while((USART1->SR&0X40)==0);
-		
+		while((USART1->SR&0X40)==0);	
     }
 	return *this;
 }
 
 //构造函数
-IAP::IAP(u32 baud,uint32_t startAddress,bool useHalfWord)
+IAP::IAP(u32 baud,bool useHalfWord)
 {
 	USART_Data_Len=0;
 	USART_COUNT=0;
 	USART_FLAG=0;
+	FlashPages=0;
+	
 	USART_init(baud);
 	
-	if(startAddress%STM_SECTOR_SIZE !=0)//不是页的开始,将开始处设置为下一个页开始的地方
-		startAddress+=(STM_SECTOR_SIZE-(startAddress%STM_SECTOR_SIZE));
-		mStartAddress=startAddress;
-		mUseHalfWord=useHalfWord;
+//	if(startAddress%STM_SECTOR_SIZE !=0)//不是页的开始,将开始处设置为下一个页开始的地方
+//		startAddress+=(STM_SECTOR_SIZE-(startAddress%STM_SECTOR_SIZE));
+	mUseHalfWord=useHalfWord;
 	
 }
 
+
 void IAP::USART_IRQ(void)
 {
-		unsigned char ch;
+	unsigned char ch;
+	static u8 flag=0;
+	static char Last_data;
+	static u32 addr=FLASH_APP_ADDR;
+	
 	if(USART_GetITStatus(USART1,USART_IT_RXNE) != RESET) {
+
 		ch = USART_ReceiveData(USART1);
-		USART_Buffer[USART_Data_Len++]=ch;
+		
+		if(flag==0)
+		{
+			flag=1;
+			Last_data=ch;
+		}
+		else
+		{		
+			flag=0;
+			USART_Buffer[USART_Data_Len]=(u16)ch<<8;
+			USART_Buffer[USART_Data_Len]+=(u16)Last_data;
+					
+			FLASH_ProgramHalfWord(addr,USART_Buffer[USART_Data_Len]);
+		
+			USART_Data_Len++;
+			addr=addr+0x02;	
+
+			//TEST start
+//			USART_Buffer[0]=(u16)ch<<8;
+//			USART_Buffer[1]+=(u16)Last_data;
+//			FLASH_ProgramHalfWord(addr,0x12);
+			//TEST END
+					
+//			FLASH_Lock();	
+				
+		}
+		if(USART_Data_Len>=512)  //当写满一页后
+		{
+			USART_Data_Len=0;
+			FlashPages++;
+		}
 		USART_COUNT=0;//清空计数
 		USART_FLAG=1;//标识读取
+		
 	}
+
 }
 
 void IAP::delay_ms(u16 nms)
@@ -105,30 +143,46 @@ void USART1_IRQHandler(void)
 //IAP***************************************************************************
 void IAP::write_appbin()
 {
-	u16 t;
-	u16 i=0;
-	u16 buff[1024];
-	u32 fwaddr=0;
-	u16 temp;
-	u8 *dfu=USART_Buffer;
-	for(t=0;t<USART_Data_Len/2;t++)
-	{						    
-		//合成一个16位
-		temp=(u16)dfu[1]<<8;
-		temp+=(u16)dfu[0];	  
-		dfu+=2;//偏移2个字节
-		
-		buff[i++]=temp;	
-		if(i==STM_SECTOR_SIZE/2)
-		{
-			i=0;
-			Write(fwaddr,buff,STM_SECTOR_SIZE/2);	
-			fwaddr++;//翻到下一页
-		}
-	}
-	if(i)Write(fwaddr,buff,i);//将最后的一些内容字节写进去.  
+//	u16 t;
+//	u16 i=0;
+//	u16 buff[1024];
+//	u32 fwaddr=0;
+//	u16 temp;
+//	u8 *dfu=USART_Buffer;
+//	for(t=0;t<USART_Data_Len;t++)
+//	{						    
+//		//合成一个16位
+//		temp=(u16)dfu[1]<<8;
+//		temp+=(u16)dfu[0];	  
+//		dfu+=2;//偏移2个字节
+//		
+//		buff[i++]=temp;	
+//		if(i==STM_SECTOR_SIZE/2)
+//		{
+//			i=0;
+//			Write(fwaddr,buff,STM_SECTOR_SIZE/2);	
+//			fwaddr++;//翻到下一页
+//		}
+//	}
+//	if(i)Write(fwaddr,buff,i);//将最后的一些内容字节写进去.  
+	
+	
+//	u16 t;
+//	u16 i=0;
+//	u16 buff[1024];
+//	u16 temp;
+//	u8 *dfu=USART_Buffer;
+//	for(t=0;t<(USART_Data_Len/2);t++)
+//	{						    
+//		//合成一个16位
+//		temp=(u16)dfu[1]<<8;
+//		temp+=(u16)dfu[0];	  
+//		dfu+=2;//偏移2个字节
+//		buff[i++]=temp;	
+//	}
+//	
+//	Write(0,buff,i);
 }
-
 
 //跳转到应用程序段
 //appxaddr:用户代码起始地址.
@@ -155,7 +209,7 @@ bool IAP::Read(uint16_t pageNumber, uint16_t* data,u16 length)
 	{
 		while(dataLength)
 		{
-			*data=(*(__IO uint16_t*)(mStartAddress+pageNumber*STM_SECTOR_SIZE+(length-dataLength)*2));
+			*data=(*(__IO uint16_t*)(FLASH_APP_ADDR+pageNumber*STM_SECTOR_SIZE+(length-dataLength)*2));
 			++data;
 			--dataLength;
 		}
@@ -164,7 +218,7 @@ bool IAP::Read(uint16_t pageNumber, uint16_t* data,u16 length)
 	{
 		while(dataLength)
 		{
-			*data=(u32)(*(__IO uint32_t*)(mStartAddress+pageNumber*STM_SECTOR_SIZE+(length-dataLength)*4));
+			*data=(u32)(*(__IO uint32_t*)(FLASH_APP_ADDR+pageNumber*STM_SECTOR_SIZE+(length-dataLength)*4));
 			++data;
 			--dataLength;
 		}
@@ -173,43 +227,7 @@ bool IAP::Read(uint16_t pageNumber, uint16_t* data,u16 length)
 }
 
 
-///////////////////////
-///向储存器中特定位置写值
-///@param -pageNumber 相对于开始地址的地址
-///@param -Data 将要写入的数据
-///@retval -1 : 写入成功 -0：写入失败
-///////////////////////
-bool IAP::Write (uint16_t pageNumber, uint16_t* data,u16 length)	
-{
-	u16 dataLength=length;
-	FLASH_Unlock();
-	FLASH_ClearFlag(FLASH_FLAG_BSY|FLASH_FLAG_EOP|
-					FLASH_FLAG_PGERR|FLASH_FLAG_WRPRTERR);
-	if(!FLASH_ErasePage(mStartAddress+pageNumber*STM_SECTOR_SIZE))//擦除页
-		return false;
-	if(mUseHalfWord)
-	{
-		while(dataLength)
-		{
-			if(FLASH_COMPLETE!=FLASH_ProgramHalfWord(mStartAddress+pageNumber*STM_SECTOR_SIZE+(length-dataLength)*2,*data))
-				return false;
-			++data;
-			--dataLength;
-		}
-	}
-	else
-	{
-		while(dataLength)
-		{
-			if(FLASH_COMPLETE!=FLASH_ProgramWord(mStartAddress+pageNumber*STM_SECTOR_SIZE+(length-dataLength)*4,(u32)*data))
-				return false;
-			++data;
-			--dataLength;
-		}
-	}
-	FLASH_Lock();
-	return true;
-}
+
 
 
 extern "C"{
