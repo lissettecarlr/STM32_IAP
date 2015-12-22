@@ -25,9 +25,16 @@ void judge_updata()
 int main ()
 {
 	 judge_updata();
+	
+	//用于调试 start*********************************************
+	 if(GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_8)==0)//将PA8接地将直接运行APP程序
+	 {
+		SWITCH=4;
+	 }
+	//end******************************************************** 
+	 
 while(1)
 	{
-	
 		switch (SWITCH)
 		{
 			case 1:{
@@ -94,3 +101,4 @@ void start_procedure(void)
 		SWITCH=1;
 	}		
 }
+
