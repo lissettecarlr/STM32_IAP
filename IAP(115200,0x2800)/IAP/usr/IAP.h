@@ -22,7 +22,7 @@ class IAP{
 
 	private:
 		iapfun jump2app;//单纯的指针
-		void USART_init(u32 baud);
+		void USART_init(u32 baud);//串口初始化，传入波特率，改波特率也就是之后下载程序的波特率
 	
 	public:
 		u16 FlashPages;
@@ -37,7 +37,7 @@ class IAP{
 		u32 USART_Data_Len;//记录数据
 		u8 USART_FLAG;	//转换标识
 	
-	    IAP& operator<<(const char* pStr);//字符串输出 
+	  IAP& operator<<(const char* pStr);//字符串输出 
 		void USART_IRQ(void);//串口中断函数
 	
 		//延时*******************************************************************
