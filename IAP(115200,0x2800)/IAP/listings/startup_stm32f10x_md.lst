@@ -466,13 +466,13 @@ ARM Macro Assembler    Page 8
 Command Line: --debug --xref --cpu=Cortex-M3 --apcs=interwork --depend=..\out\s
 tartup_stm32f10x_md.d -o..\out\startup_stm32f10x_md.o -IE:\project\SMT32F1_PRO\
 pro_git\IAP\IAP(115200,0x2800)\IAP\project\RTE -IE:\project\SMT32F1_PRO\pro_git
-\IAP\IAP(115200,0x2800)\IAP\project\RTE\Device\STM32F103C8 -IC:\Other\Keil5\ARM
-\PACK\ARM\CMSIS\4.2.0\CMSIS\Include -IC:\Other\Keil5\ARM\PACK\Keil\STM32F1xx_DF
-P\2.0.0 -IC:\Other\Keil5\ARM\PACK\Keil\STM32F1xx_DFP\2.0.0\Device\Include -IC:\
-Other\Keil5\ARM\PACK\Keil\STM32F1xx_DFP\2.0.0\Device\StdPeriph_Driver\inc --pre
-define="__MICROLIB SETA 1" --predefine="__UVISION_VERSION SETA 513" --predefine
-="_RTE_ SETA 1" --predefine="STM32F10X_MD SETA 1" --list=..\listings\startup_st
-m32f10x_md.lst RTE\Device\STM32F103C8\startup_stm32f10x_md.s
+\IAP\IAP(115200,0x2800)\IAP\project\RTE\Device\STM32F103C8 -IC:\Other\keil5\ARM
+\CMSIS\4.2.0\CMSIS\Include -IC:\Other\keil5\Keil\STM32F1xx_DFP\2.1.0 -IC:\Other
+\keil5\Keil\STM32F1xx_DFP\2.1.0\Device\Include -IC:\Other\keil5\Keil\STM32F1xx_
+DFP\2.1.0\Device\StdPeriph_Driver\inc --predefine="__MICROLIB SETA 1" --predefi
+ne="__UVISION_VERSION SETA 513" --predefine="_RTE_ SETA 1" --predefine="STM32F1
+0X_MD SETA 1" --list=..\listings\startup_stm32f10x_md.lst RTE\Device\STM32F103C
+8\startup_stm32f10x_md.s
 
 
 

@@ -1,7 +1,13 @@
 --cpu Cortex-M3
 "..\out\main.o"
 "..\out\iap.o"
+"..\out\interrupt.o"
+"..\out\memory.o"
+"..\out\usart.o"
+"..\out\taskmanager.o"
+"..\out\gpio.o"
 "..\out\misc.o"
+"..\out\stm32f10x_dma.o"
 "..\out\stm32f10x_flash.o"
 "..\out\stm32f10x_gpio.o"
 "..\out\stm32f10x_rcc.o"

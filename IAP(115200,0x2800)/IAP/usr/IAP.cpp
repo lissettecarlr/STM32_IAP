@@ -1,155 +1,276 @@
 #include "IAP.h"
 
-IAP BootLoader(115200,true);
-
-void IAP::USART_init(u32 baud)
+IAP::IAP(USART &com,Memory &program_memory,Memory &updata_switch)
+:com_(com),program_memory_(program_memory),updata_switch_(updata_switch)
 {
-	GPIO_InitTypeDef GPIO_InitStructure;		
-	USART_InitTypeDef USART_InitStructure;
-	NVIC_InitTypeDef NVIC_InitStructure;	
-	
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1,ENABLE); 
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA ,ENABLE);
-	
-	
-	
-	GPIO_InitStructure.GPIO_Pin 	= GPIO_Pin_9;						
-	GPIO_InitStructure.GPIO_Mode 	= GPIO_Mode_AF_PP;				
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;				
-	GPIO_Init(GPIOA, &GPIO_InitStructure);									
-	
-	
-	GPIO_InitStructure.GPIO_Pin 	= GPIO_Pin_10;
-	GPIO_InitStructure.GPIO_Mode 	= GPIO_Mode_IN_FLOATING;	
-	GPIO_Init(GPIOA, &GPIO_InitStructure);						
-	
-	
-	USART_InitStructure.USART_BaudRate=baud;																		
-	USART_InitStructure.USART_WordLength=USART_WordLength_8b;													
-	USART_InitStructure.USART_StopBits = USART_StopBits_1;													
-	USART_InitStructure.USART_Parity = USART_Parity_No ; 														
-	USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None; 	
-	USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx; 							
-	USART_Init(USART1, &USART_InitStructure);																				
-	
-	USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);														
-	USART_Cmd(USART1, ENABLE);															
-	
-	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_0);	
-	NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn; 		
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority= 0; 	
-	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;		
-	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;					
-	NVIC_Init(&NVIC_InitStructure);				
+	packet_sum_=0;
+	packet_number_=0;
+	state_=0;
 }
 
-
-IAP& IAP::operator<<(const char* pStr)
+//和校验
+bool IAP::cheakSum(u8 *data,int lenth)
 {
-    while(*pStr)
-    {
-        USART1->DR= *pStr++;
-		while((USART1->SR&0X40)==0);	
-    }
-	return *this;
-}
-
-//构造函数
-IAP::IAP(u32 baud,bool useHalfWord)
-{
-	USART_Data_Len=0;
-	USART_COUNT=0;
-	USART_FLAG=0;
-	FlashPages=0;
-	state=0;
-	USART_init(baud);
-}
-
-
-void IAP::USART_IRQ(void)
-{
-	unsigned char ch;
-	static u8 flag=0;
-	static char Last_data;
-	static u32 addr=FLASH_APP_ADDR;
-	
-	if(USART_GetITStatus(USART1,USART_IT_RXNE) != RESET) {
-
-		ch = USART_ReceiveData(USART1);
-		
-	if(state==0)
+	u8 sum =0 ;
+	for(int i=0;i<lenth-1;i++)
 	{
-	   USART_Buffer[USART_Data_Len++]=ch;
+		sum+=data[i];
+	}
+	if(sum == data[lenth-1])
+		return true;
+	else
+		return false;
+}
+
+
+bool IAP::cheakPacketSum()//检查是否接收完所有的包
+{
+		if(!GetANeedPacket()) 
+			return true;
+		else
+			return false;
+}
+
+//逐页擦除
+bool IAP::EraseFlash()
+{
+	state_=2;
+	for(int i=0;i<page_sum_;i++)
+		program_memory_.Clear(i);
+	return true;
+}
+
+
+//监听信息包
+bool IAP::Unpacking_msg()
+{
+		if(com_.ReceiveBufferSize()>=2) //读取包头
+		{
+			u8 head[2];
+			com_.GetReceivedData(head,2);
+			if(head[0] == 0xff && head[1] == 0xAA)
+			{
+				u8 temp =com_.ReceiveBufferSize();
+				while(temp<4)
+				{
+					//进行超时处理
+					temp =com_.ReceiveBufferSize();
+				}
+					u8 body[4];
+					com_.GetReceivedData(body,4);
+					if(cheakSum(body,4))
+					{
+							packet_sum_ = body[1]; //记录总包数
+							SendMsgReply(1);
+							com_.ClearReceiveBuffer();
+							return true;
+					}
+					else
+					{
+						SendMsgReply(2);
+						com_.ClearReceiveBuffer();
+						return false;
+					}
+			}
+			else
+			{
+				com_.ClearReceiveBuffer();
+				return false;
+			}
+		}
+			else
+				return false;
+
+}
+
+bool IAP::Unpacking_data()
+{
+		if(com_.ReceiveBufferSize()>=2) //读取包头
+		{
+			u8 head[2];
+			com_.GetReceivedData(head,2);
+			if(head[0] == 0xff && head[1] == 0xBB)
+			{
+				while(com_.ReceiveBufferSize()<1027); // 1024 + 包型  +包号+校验和
+				u8 type;
+				com_.GetReceivedData(&type,1);
+				if(type ==0x01) //类型为1k
+				{
+					u8 body[1027];
+					body[0] = 0x01;
+					com_.GetReceivedData(body+1,1026);
+					if(cheakSum(body,1027))
+					{
+							u8 BagNumber = body[1];
+						for(int i=2;i<1026;i++) //将数据转存到缓冲区
+									data_[i-2] = body[i]; 
+							if(CheckPcketIsOk(BagNumber)) //检查该包是否已经保存
+							{
+									SetPacketIsOK(BagNumber);//将该包置为True
+//									packet_count_++; //接收包数累加
+									packet_number_ = BagNumber;
+									state_ =0x04; //修改状态为存入
+									SendDataReply(0x01,BagNumber);
+									return true;
+							}
+							else
+							{
+								//包数错误
+								u8 NeedPacket = GetANeedPacket();		
+								if(!NeedPacket) 
+									SendDataReply(0x02,NeedPacket); //向上位机告诉一个你需要的包
+								return false;
+							}
+					}
+					else
+					{
+						//校验错误
+						u8 NeedPacket = GetANeedPacket();		
+								if(!NeedPacket) 
+										SendDataReply(0x03,NeedPacket);
+						return false;
+					}
+					
+				}
+				else
+				{
+					return false ;//不是1K类型
+				}
+			}
+			else 
+			{
+				return false;
+			}
+		}
+			else
+				return false;
+}
+
+bool IAP::UpdataProcedure()
+{
+	if(packet_number_<packet_sum_ && packet_number_>0)
+	{
+		program_memory_.Write(packet_number_-1,data_,1024);
+		return true;
 	}
 	else
-	{	
-		if(flag==0)
-		{
-			flag=1;
-			Last_data=ch;
-		}
-		else
-		{		
-			flag=0;
-			USART_Buffer[USART_Data_Len]=(u16)ch<<8;//将后得到的数据作为高位
-			USART_Buffer[USART_Data_Len]+=(u16)Last_data;//将先得到的数据作为低位
-					
-			FLASH_ProgramHalfWord(addr,USART_Buffer[USART_Data_Len]);
-		
-			USART_Data_Len++;
-			addr=addr+0x02;				
-				
-		}
-		if(USART_Data_Len>=FLASH_ONEPAGE_SIZE/2)  //当写满一页后
-		{
-			USART_Data_Len=0;
-			FlashPages++;
-		}
-		USART_COUNT=0;//清空计数
-		USART_FLAG=1;//标识读取
-		
-	}
-	
-}
+		return false ;
 }
 
-void IAP::delay_ms(u16 nms)
-{
-	 u32 temp;
-	 SysTick->LOAD = 9000*nms;
-	 SysTick->VAL=0X00;
-	 SysTick->CTRL=0X01;
-	 do
-	 {
-	  temp=SysTick->CTRL;
-	 }while((temp&0x01)&&(!(temp&(1<<16))));
-	 SysTick->CTRL=0x00; 
-	 SysTick->VAL =0X00; 
-	
-}
-
-void USART1_IRQHandler(void)
-{
-	BootLoader.USART_IRQ();
-}
-
-
-//IAP***************************************************************************
-//跳转到应用程序段
-//appxaddr:用户代码起始地址.
-bool IAP::load_app()
+bool IAP::StartNewProcedure()
 {
 	if(((*(vu32*)FLASH_APP_ADDR)&0x2FFE0000)==0x20000000)	//检查栈顶地址是否合法.
 	{ 
-		jump2app=(iapfun)*(vu32*)(FLASH_APP_ADDR+4);		//用户代码区第二个字为程序开始地址(复位地址)		
+		jump_app_=(pointer_start)*(vu32*)(FLASH_APP_ADDR+4);		//用户代码区第二个字为程序开始地址(复位地址)		
 		MSR_MSP(*(vu32*)FLASH_APP_ADDR);					//初始化APP堆栈指针(用户代码区的第一个字用于存放栈顶地址)
-		jump2app();											//跳转到APP.
+		jump_app_();											//跳转到APP.
 		return true;
-		
-	}else{
-		return false;
 	}
-}	
+	else
+		return false;
+}
+
+
+//这里定义两个字节为标识位，其中等于0x1111表示执行新程序，0xffff表示需要更新程序
+bool IAP::SetUpdataYesOrNo(bool yes_no)
+{
+	u16 yes = 0xffff;
+	u16 no = 0x1111;
+	
+	if(yes_no == true)
+	  updata_switch_.Write(0,0,&yes,1);
+	else
+		updata_switch_.Write(0,0,&no,1);
+	
+		return true;
+}
+
+//需要更新返回true
+bool IAP::GetUpdataUesOrNo()
+{
+	u16 temp_yes_no;
+	updata_switch_.Read(0,0,&temp_yes_no,1);
+	if(temp_yes_no == 0xffff)
+		return true;
+	else
+		return false;
+}
+
+bool IAP::SendMsgReply(u8 State)					 //发送消息包应答
+{
+		u8 SendData[5]  = {0};
+		SendData[0] = 0xBB;
+		SendData[1] = 0xaa;
+		SendData[2] = State;
+		SendData[3] = 0;
+		SendData[4] = 0;
+		for(u8 i=0;i<4;i++)
+		{
+			SendData[4]+= SendData[i];
+		}
+		com_.SendData(SendData,5);
+		return true;
+			
+}
+bool IAP::SendDataReply(u8 State,u8 BagNumber)					 //发送数据包应答
+{
+		u8 SendData[6]  = {0};
+		SendData[0] = 0xBB;
+		SendData[1] = 0xbb;
+		SendData[2] = State;
+		SendData[3] = BagNumber;
+		SendData[4] = 0;
+		for(u8 i=0;i<4;i++)
+		{
+			SendData[4]+= SendData[i];
+		}
+		com_.SendData(SendData,5);
+		return true;
+}
+
+
+bool IAP::CheckPcketIsOk(u8 packet_umber) //检查该包是否已经被读取
+{
+	if(packetIsOk[packet_umber-1] == true)
+		return true ;
+	else
+		return false;
+}
+
+//得到当前接收到的包数
+u8 IAP::GetPacketCount()
+{
+	 u8 tempSum = 0;
+	 for(u8 i =0;i<packet_sum_;i++)
+	{
+		  if( packetIsOk[i] == true )
+				tempSum++;
+	}
+		return tempSum ; 
+}
+
+u8 IAP::GetANeedPacket()// 得到一个需要的包号，优先地位 返回0X00 表示已经完全接收完毕
+{
+	for(u8 i = 0;i<packet_sum_;i++)
+		{
+			 if(packetIsOk[i] == true)
+			 {
+				 return i+1;			
+			 }
+		}
+		return 0;
+}
+
+bool IAP::SetPacketIsOK(u8 packet_number)
+{
+	if(packet_number > packet_sum_) //不能大于总包大小
+		 return false;
+	 else
+	 {
+		 packetIsOk[packet_number-1] = true ; 
+		 return true ;
+	 }
+}
 
 extern "C"{
 	
@@ -158,5 +279,4 @@ __asm void MSR_MSP(u32 addr)
     MSR MSP, r0 			//set Main Stack value
     BX r14
 }
-
 };
